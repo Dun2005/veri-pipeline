@@ -181,10 +181,10 @@ def main():
                 print(f"[Execution Error]: {e}")
         return
 
-    if not args.code or not args.explanation:
+    if not args.code:
         parser.print_help()
         print(
-            "\nTip: Run with --demo to test built-in benchmark examples, or provide both --code and --explanation."
+            "\nTip: Run with --demo to test built-in benchmark examples, or provide --code."
         )
         return
 
@@ -195,12 +195,22 @@ def main():
     except (FileNotFoundError, OSError):
         code_str = args.code
 
-    # Read explanation
-    try:
-        with open(args.explanation, "r", encoding="utf-8") as f:
-            expl_str = f.read()
-    except (FileNotFoundError, OSError):
-        expl_str = args.explanation
+    # Read or auto-generate explanation with LLM
+    expl_str = None
+    if args.explanation:
+        try:
+            with open(args.explanation, "r", encoding="utf-8") as f:
+                expl_str = f.read()
+        except (FileNotFoundError, OSError):
+            expl_str = args.explanation
+    else:
+        from src.refinement.generator import ExplanationGenerator
+        print(f"\n[1/2 Actor] Auto-generating candidate explanation using LLM ({args.model})...")
+        generator = ExplanationGenerator(
+            model=args.model, provider=args.provider, mock=args.mock
+        )
+        expl_str = generator.generate_initial(code_str)
+        print(f"Generated Explanation E_0:\n\"\"\"\n{expl_str}\n\"\"\"\n")
 
     if args.refine:
         from src.refinement.generator import ExplanationGenerator

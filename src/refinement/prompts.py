@@ -13,7 +13,14 @@ GUIDELINES FOR SOUND EXPLANATIONS:
 4. Concision without Omission: Be concise and factual. Do not claim features, exception handling, or safety guarantees that do not exist in the code.
 """
 
-INITIAL_GENERATION_USER_PROMPT = """Write a mathematically sound and comprehensive explanation of the following Python program:
+INITIAL_GENERATION_USER_PROMPT = """Explain what the following Python program does, describing its main purpose, input arguments, and expected return value:
+
+```python
+{code}
+```
+"""
+
+FORMAL_GENERATION_USER_PROMPT = """Write a mathematically sound and comprehensive explanation of the following Python program:
 
 ```python
 {code}
@@ -55,3 +62,4 @@ Rewrite the explanation to resolve ALL errors and criticisms identified by the j
 3. Do not add speculative claims that cannot be proven from the code.
 4. Output ONLY the revised, corrected explanation.
 """
+

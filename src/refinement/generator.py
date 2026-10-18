@@ -11,6 +11,7 @@ from src.baselines.schemas import JudgeResult
 from src.refinement.prompts import (
     GENERATOR_SYSTEM_PROMPT,
     INITIAL_GENERATION_USER_PROMPT,
+    FORMAL_GENERATION_USER_PROMPT,
     REFINEMENT_USER_PROMPT,
 )
 from src.utils.config import get_gemini_api_key, get_openai_api_key
@@ -62,14 +63,18 @@ class ExplanationGenerator:
         else:
             raise ValueError(f"Unsupported provider: {self.provider}")
 
-    def generate_initial(self, code: str) -> str:
+    def generate_initial(self, code: str, formal: bool = False) -> str:
         """
-        Generate an initial explanation E_0 for program P.
+        Generate an initial candidate explanation E_0 for program P using the LLM.
+        :param code: Source code of program P.
+        :param formal: If True, instructs LLM with rigorous formal verification requirements.
+                       If False, asks for a standard natural explanation (reflecting typical LLM outputs).
         """
         if self.mock:
             return self._mock_initial(code)
 
-        prompt = INITIAL_GENERATION_USER_PROMPT.format(code=code.strip())
+        template = FORMAL_GENERATION_USER_PROMPT if formal else INITIAL_GENERATION_USER_PROMPT
+        prompt = template.format(code=code.strip())
         return self._generate(prompt)
 
     def refine(self, code: str, previous_explanation: str, judge_result: JudgeResult) -> str:
@@ -185,3 +190,4 @@ class ExplanationGenerator:
         return (
             previous_explanation + " (Revised: Corrected edge case handling based on verifier feedback.)"
         )
+

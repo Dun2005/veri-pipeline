@@ -32,3 +32,4 @@ class RefinementResult(BaseModel):
     final_soundness: float = Field(..., description="Soundness score at final iteration.")
     steps: List[RefinementStep] = Field(default_factory=list, description="Trajectory of all iteration steps.")
     evolution_summary: str = Field(..., description="Summary of how the explanation improved across iterations.")
+

@@ -52,8 +52,9 @@ class RefinementLoop:
 
         # Step 0: Ensure starting explanation exists
         if not initial_explanation or not initial_explanation.strip():
-            logger.info("No initial explanation provided. Generator synthesizing initial draft E_0...")
+            print(f"==> [1/3 Actor] Synthesizing initial candidate explanation E_0 with LLM ({self.generator.model})...")
             current_explanation = self.generator.generate_initial(code)
+            print(f"    Initial Explanation E_0 generated ({len(current_explanation.split())} words).")
         else:
             current_explanation = initial_explanation.strip()
 
@@ -61,13 +62,15 @@ class RefinementLoop:
         steps: List[RefinementStep] = []
         converged = False
 
-        logger.info(f"Starting Refinement Loop (max_iterations={self.max_iterations})")
+        print(f"\n==> [2/3 Starting Feedback Loop] Max iterations: {self.max_iterations}")
 
         for iteration in range(1, self.max_iterations + 1):
-            logger.info(f"--- Iteration {iteration}/{self.max_iterations} ---")
+            print(f"\n--- Iteration {iteration}/{self.max_iterations} ---")
+            print(f"==> [Critic] Evaluating explanation with LLM Judge ({self.judge.model})...")
             
             # Critic evaluates current explanation
             judge_res = self.judge.evaluate(code, current_explanation)
+            print(f"    Verdict: {judge_res.verdict.value} | Soundness: {judge_res.soundness_score:.2f} | Completeness: {judge_res.completeness_score:.2f}")
             
             step = RefinementStep(
                 iteration=iteration,
@@ -83,16 +86,15 @@ class RefinementLoop:
             is_correct = (judge_res.verdict == Verdict.CORRECT) and has_no_counterexample
 
             if is_correct:
-                logger.info(f"Convergence achieved at iteration {iteration}! Verdict is CORRECT.")
+                print(f"==> [Convergence] Formal correctness verified at iteration {iteration}!")
                 converged = True
                 break
 
             # If not converged and iterations remain, prompt generator to refine
             if iteration < self.max_iterations:
-                logger.info(
-                    f"Refining explanation based on judge feedback (Verdict: {judge_res.verdict.value}, "
-                    f"Soundness: {judge_res.soundness_score:.2f})..."
-                )
+                if judge_res.counterexample and judge_res.counterexample.found:
+                    print(f"    [!] Counterexample found: {judge_res.counterexample.input_value} -> P(x) = {judge_res.counterexample.actual_output}")
+                print(f"==> [Actor] Refining explanation E_{iteration} with LLM based on Critic feedback...")
                 current_explanation = self.generator.refine(code, current_explanation, judge_res)
 
         # Build trajectory summary
@@ -123,3 +125,4 @@ class RefinementLoop:
             steps=steps,
             evolution_summary=evolution_summary,
         )
+
