@@ -44,3 +44,14 @@ def get_gemini_api_key() -> str | None:
 def get_openai_api_key() -> str | None:
     return os.environ.get("OPENAI_API_KEY")
 
+
+def get_judge_model() -> str:
+    """Default model for the Critic (LLMJudge). Defaults to gemini-3.8-flash."""
+    return os.environ.get("JUDGE_MODEL", "gemini-3.8-flash")
+
+
+def get_generator_model() -> str:
+    """Default model for the Actor (ExplanationGenerator). Defaults to gemini-3.5-flash-lite."""
+    return os.environ.get("GENERATOR_MODEL", "gemini-3.5-flash-lite")
+
+

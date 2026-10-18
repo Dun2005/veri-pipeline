@@ -135,8 +135,20 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="gemini-3.5-flash-lite",
-        help="LLM model (e.g. gemini-3.8-flash, gemini-2.5-pro, gpt-4o, gpt-4o-mini)",
+        default=None,
+        help="Default model (overridden by --judge-model or --generator-model)",
+    )
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=None,
+        help="LLM model for the Critic/Judge (e.g. gemini-3.8-flash, gemini-3.1-pro-preview, gpt-4o)",
+    )
+    parser.add_argument(
+        "--generator-model",
+        type=str,
+        default=None,
+        help="LLM model for the Actor/Generator (e.g. gemini-3.5-flash-lite, gpt-4o-mini)",
     )
     parser.add_argument(
         "--provider",
@@ -159,8 +171,11 @@ def main():
 
     args = parser.parse_args()
 
+    judge_model = args.judge_model or args.model
+    generator_model = args.generator_model or args.model
+
     try:
-        judge = LLMJudge(model=args.model, provider=args.provider, mock=args.mock)
+        judge = LLMJudge(model=judge_model, provider=args.provider, mock=args.mock)
     except Exception as e:
         print(f"[Error] Failed to initialize LLMJudge: {e}", file=sys.stderr)
         sys.exit(1)
@@ -205,10 +220,10 @@ def main():
             expl_str = args.explanation
     else:
         from src.refinement.generator import ExplanationGenerator
-        print(f"\n[1/2 Actor] Auto-generating candidate explanation using LLM ({args.model})...")
         generator = ExplanationGenerator(
-            model=args.model, provider=args.provider, mock=args.mock
+            model=generator_model, provider=args.provider, mock=args.mock
         )
+        print(f"\n[1/2 Actor] Auto-generating candidate explanation using LLM ({generator.model})...")
         expl_str = generator.generate_initial(code_str)
         print(f"Generated Explanation E_0:\n\"\"\"\n{expl_str}\n\"\"\"\n")
 
@@ -219,7 +234,7 @@ def main():
 
         print("Starting Actor-Critic Explanation Refinement Feedback Loop...")
         generator = ExplanationGenerator(
-            model=args.model, provider=args.provider, mock=args.mock
+            model=generator_model, provider=args.provider, mock=args.mock
         )
         refiner = RefinementLoop(
             judge=judge,

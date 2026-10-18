@@ -14,7 +14,7 @@ from src.refinement.prompts import (
     FORMAL_GENERATION_USER_PROMPT,
     REFINEMENT_USER_PROMPT,
 )
-from src.utils.config import get_gemini_api_key, get_openai_api_key
+from src.utils.config import get_gemini_api_key, get_openai_api_key, get_generator_model
 
 logger = logging.getLogger(__name__)
 
@@ -27,20 +27,20 @@ class ExplanationGenerator:
 
     def __init__(
         self,
-        model: str = "gemini-3.5-flash-lite",
+        model: Optional[str] = None,
         provider: Optional[str] = None,
         temperature: float = 0.2,
         api_key: Optional[str] = None,
         mock: bool = False,
     ):
-        self.model = model
+        self.model = model or get_generator_model()
         self.temperature = temperature
         self.mock = mock
 
         if provider is None:
-            if "gemini" in model.lower():
+            if "gemini" in self.model.lower():
                 self.provider = "gemini"
-            elif "gpt" in model.lower() or "o1" in model.lower() or "o3" in model.lower():
+            elif "gpt" in self.model.lower() or "o1" in self.model.lower() or "o3" in self.model.lower():
                 self.provider = "openai"
             else:
                 self.provider = "gemini"

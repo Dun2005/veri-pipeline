@@ -18,7 +18,7 @@ from pydantic import ValidationError
 from src.baselines.schemas import JudgeResult, Verdict, ClaimAnalysis, Counterexample
 from src.baselines.prompts import LLM_JUDGE_SYSTEM_PROMPT, LLM_JUDGE_USER_PROMPT_TEMPLATE
 from src.baselines.sandbox import execute_counterexample, generate_boundary_traces
-from src.utils.config import get_gemini_api_key, get_openai_api_key
+from src.utils.config import get_gemini_api_key, get_openai_api_key, get_judge_model
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class LLMJudge:
 
     def __init__(
         self,
-        model: str = "gemini-3.5-flash-lite",
+        model: Optional[str] = None,
         provider: Optional[str] = None,
         temperature: float = 0.0,
         api_key: Optional[str] = None,
@@ -40,20 +40,20 @@ class LLMJudge:
         """
         Initialize the LLM Judge.
 
-        :param model: Model name, e.g. "gemini-2.5-flash", "gemini-2.5-pro", "gpt-4o", "gpt-4o-mini".
+        :param model: Model name, e.g. "gemini-3.8-flash", "gemini-3.1-pro-preview", "gpt-4o". Defaults to JUDGE_MODEL in .env or "gemini-3.8-flash".
         :param provider: "gemini" or "openai". If None, inferred automatically from model name.
         :param temperature: Sampling temperature (0.0 recommended by Zheng et al. for deterministic grading).
         :param api_key: Explicit API key. If None, loaded from environment / .env.
         :param mock: If True, uses offline heuristic mock evaluation without calling external APIs.
         """
-        self.model = model
+        self.model = model or get_judge_model()
         self.temperature = temperature
         self.mock = mock
 
         if provider is None:
-            if "gemini" in model.lower():
+            if "gemini" in self.model.lower():
                 self.provider = "gemini"
-            elif "gpt" in model.lower() or "o1" in model.lower() or "o3" in model.lower():
+            elif "gpt" in self.model.lower() or "o1" in self.model.lower() or "o3" in self.model.lower():
                 self.provider = "openai"
             else:
                 self.provider = "gemini"

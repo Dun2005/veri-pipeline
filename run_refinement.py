@@ -75,8 +75,20 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="gemini-3.5-flash-lite",
-        help="LLM model to use for both Actor and Critic",
+        default=None,
+        help="Default model for both Actor and Critic (overridden by --judge-model or --generator-model)",
+    )
+    parser.add_argument(
+        "--judge-model",
+        type=str,
+        default=None,
+        help="LLM model for the Critic/Judge (e.g. gemini-3.8-flash, gemini-3.1-pro-preview, gpt-4o)",
+    )
+    parser.add_argument(
+        "--generator-model",
+        type=str,
+        default=None,
+        help="LLM model for the Actor/Generator (e.g. gemini-3.5-flash-lite, gpt-4o-mini)",
     )
     parser.add_argument(
         "--provider",
@@ -88,9 +100,12 @@ def main():
 
     args = parser.parse_args()
 
-    judge = LLMJudge(model=args.model, provider=args.provider, mock=args.mock)
+    judge_model = args.judge_model or args.model
+    generator_model = args.generator_model or args.model
+
+    judge = LLMJudge(model=judge_model, provider=args.provider, mock=args.mock)
     generator = ExplanationGenerator(
-        model=args.model, provider=args.provider, mock=args.mock
+        model=generator_model, provider=args.provider, mock=args.mock
     )
     refiner = RefinementLoop(
         judge=judge, generator=generator, max_iterations=args.max_iter, mock=args.mock
