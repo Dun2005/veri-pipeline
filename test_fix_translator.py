@@ -61,6 +61,7 @@ def _find_main_body(src: str) -> str:
 
 
 def _translate_expression(expr: str) -> str:
+    expr = " ".join(expr.split())
     expr = expr.strip()
     expr = expr.replace(";", "")
     # Logical operators (must not use \b because & and | are non-word chars)
@@ -85,7 +86,7 @@ def _compile(expr: str) -> str:
 def _collect_declared(body: str) -> Set[str]:
     declared: Set[str] = set()
     for vm in re.finditer(
-        r"\b(?:int|unsigned\s+int|unsigned\s+char|unsigned\s+short|char|long|unsigned\s+long|short)\s+([a-zA-Z_][a-zA-Z0-9_,\s*=]*?)(?:;|\n|\Z)",
+        r"\b(?:int|unsigned\s+int|unsigned\s+char|unsigned\s+short|char|long|unsigned\s+long|short)\s+([^;]+?);",
         body,
     ):
         names = vm.group(1)
@@ -122,7 +123,32 @@ def _find_matching_paren(body: str, start: int) -> int:
     return j - 1
 
 
-def _compile_block(body: str, depth: int = 1) -> List[str]:
+def _find_statement_end(body: str, start: int) -> int:
+    i = start
+    while i < len(body) and body[i].isspace():
+        i += 1
+    if i >= len(body):
+        return len(body)
+    m = re.match(r"(?:for|while|if)\s*\(", body[i:])
+    if m:
+        open_p = i + m.end() - 1
+        close_p = _find_matching_paren(body, open_p)
+        after = close_p + 1
+        while after < len(body) and body[after].isspace():
+            after += 1
+        if after < len(body) and body[after] == "{":
+            end_brace, _ = _extract_block_at(body, after)
+            return end_brace
+        else:
+            return _find_statement_end(body, after)
+    else:
+        semi = body.find(";", i)
+        return semi + 1 if semi != -1 else len(body)
+
+
+def _compile_block(body: str, depth: int = 1, params: Set[str] = None) -> List[str]:
+    if params is None:
+        params = set()
     indent = INDENT * depth
     out: List[str] = []
     i = 0
@@ -155,14 +181,14 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 out.extend(inner_stmts)
                 i = end_brace
             else:
-                semi = body.find(";", after_cond)
-                stmt_text = body[after_cond:semi] if semi != -1 else body[after_cond:]
-                stmt_compiled = _compile_block(stmt_text + ";", depth + 1)
+                stmt_end = _find_statement_end(body, after_cond)
+                stmt_text = body[after_cond:stmt_end]
+                stmt_compiled = _compile_block(stmt_text, depth + 1)
                 valid_stmts = [s for s in stmt_compiled if not s.strip().startswith("#")]
                 if not valid_stmts:
                     stmt_compiled.append(f"{indent}    pass")
                 out.extend(stmt_compiled)
-                i = semi + 1 if semi != -1 else n
+                i = stmt_end
             continue
 
         # 2. for (init; cond; step) { ... } or for (...) stmt;
@@ -209,16 +235,16 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 out.extend(inner_stmts)
                 i = end_brace
             else:
-                semi = body.find(";", after_cond)
-                stmt_text = body[after_cond:semi] if semi != -1 else body[after_cond:]
-                inner_stmts = _compile_block(stmt_text + ";", depth + 1)
+                stmt_end = _find_statement_end(body, after_cond)
+                stmt_text = body[after_cond:stmt_end]
+                inner_stmts = _compile_block(stmt_text, depth + 1)
                 if step:
                     inner_stmts.append(f"{indent}    {step}  # for-step")
                 valid_stmts = [s for s in inner_stmts if not s.strip().startswith("#")]
                 if not valid_stmts:
                     inner_stmts.append(f"{indent}    pass")
                 out.extend(inner_stmts)
-                i = semi + 1 if semi != -1 else n
+                i = stmt_end
             continue
 
         # 3. if (cond)
@@ -251,8 +277,8 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 out.extend(inner_stmts)
                 i = end_brace
             else:
-                semi = body.find(";", after_cond)
-                stmt_text = body[after_cond:semi].strip() if semi != -1 else body[after_cond:].strip()
+                stmt_end = _find_statement_end(body, after_cond)
+                stmt_text = body[after_cond:stmt_end].strip()
                 if "reach_error" in stmt_text or "abort" in stmt_text:
                     if cond.startswith("not (") and cond.endswith(")"):
                         out.append(f"{indent}assert {cond[5:-1]}")
@@ -260,15 +286,15 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                         out.append(f"{indent}assert {cond[4:]}")
                     else:
                         out.append(f"{indent}assert not ({cond})")
-                    i = semi + 1 if semi != -1 else n
+                    i = stmt_end
                     continue
 
                 out.append(f"{indent}if {cond}:")
-                inner_stmts = _compile_block(stmt_text + ";", depth + 1)
+                inner_stmts = _compile_block(stmt_text, depth + 1)
                 if not [s for s in inner_stmts if not s.strip().startswith("#")]:
                     inner_stmts.append(f"{indent}    pass")
                 out.extend(inner_stmts)
-                i = semi + 1 if semi != -1 else n
+                i = stmt_end
             continue
 
         # 3b. else if (cond) -> elif cond:
@@ -290,13 +316,13 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 out.extend(inner_stmts)
                 i = end_brace
             else:
-                semi = body.find(";", after_cond)
-                stmt_text = body[after_cond:semi].strip() if semi != -1 else body[after_cond:].strip()
-                inner_stmts = _compile_block(stmt_text + ";", depth + 1)
+                stmt_end = _find_statement_end(body, after_cond)
+                stmt_text = body[after_cond:stmt_end].strip()
+                inner_stmts = _compile_block(stmt_text, depth + 1)
                 if not [s for s in inner_stmts if not s.strip().startswith("#")]:
                     inner_stmts.append(f"{indent}    pass")
                 out.extend(inner_stmts)
-                i = semi + 1 if semi != -1 else n
+                i = stmt_end
             continue
 
         # 3c. else -> else:
@@ -314,13 +340,13 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 out.extend(inner_stmts)
                 i = end_brace
             else:
-                semi = body.find(";", after_else)
-                stmt_text = body[after_else:semi].strip() if semi != -1 else body[after_else:].strip()
-                inner_stmts = _compile_block(stmt_text + ";", depth + 1)
+                stmt_end = _find_statement_end(body, after_else)
+                stmt_text = body[after_else:stmt_end].strip()
+                inner_stmts = _compile_block(stmt_text, depth + 1)
                 if not [s for s in inner_stmts if not s.strip().startswith("#")]:
                     inner_stmts.append(f"{indent}    pass")
                 out.extend(inner_stmts)
-                i = semi + 1 if semi != -1 else n
+                i = stmt_end
             continue
 
         # 4. __VERIFIER_assert(cond);
@@ -431,9 +457,11 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
                 if "=" in p:
                     v_name, v_val = p.split("=", 1)
                     v_name = v_name.strip()
-                    v_val = _compile(v_val)
+                    if v_name in params:
+                        continue
+                    val = _compile(v_val)
                     if v_name:
-                        out.append(f"{indent}{v_name} = {v_val}")
+                        out.append(f"{indent}{v_name} = {val}")
             i += m_multi_decl.end()
             continue
 
@@ -441,7 +469,11 @@ def _compile_block(body: str, depth: int = 1) -> List[str]:
         m_assign = re.match(r"([a-zA-Z_]\w*)\s*=\s*([^;]+?)\s*;", body[i:])
         if m_assign:
             var = m_assign.group(1)
-            val = _compile(m_assign.group(2))
+            raw_val = m_assign.group(2).strip()
+            if var in params and ("nondet" in raw_val or raw_val == "0"):
+                i += m_assign.end()
+                continue
+            val = _compile(raw_val)
             out.append(f"{indent}{var} = {val}")
             i += m_assign.end()
             continue
@@ -480,7 +512,7 @@ def translate_c_code(c_src: str) -> str:
             params.append(var)
 
     param_str = ", ".join(params)
-    compiled_stmts = _compile_block(body, depth=1)
+    compiled_stmts = _compile_block(body, depth=1, params=set(params))
 
     all_stmts = []
     for g in globals_list:
@@ -496,3 +528,12 @@ def translate_c_code(c_src: str) -> str:
     if not code.endswith("\n"):
         code += "\n"
     return code
+
+
+def translate_file(c_path: Path, py_path: Path) -> str:
+    c_src = c_path.read_text(encoding="utf-8", errors="ignore")
+    code = translate_c_code(c_src)
+    py_path.parent.mkdir(parents=True, exist_ok=True)
+    py_path.write_text(code, encoding="utf-8")
+    return code
+
