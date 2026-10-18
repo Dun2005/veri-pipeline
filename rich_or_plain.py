@@ -1,9 +1,10 @@
 """
-Formatting utility for JudgeResult output.
+Formatting utility for JudgeResult and RefinementResult output.
 """
 
 from typing import Optional
 from src.baselines.schemas import JudgeResult, Verdict
+from src.refinement.schemas import RefinementResult
 
 
 def print_result(result: JudgeResult, expected: Optional[Verdict] = None) -> None:
@@ -60,3 +61,42 @@ def print_result(result: JudgeResult, expected: Optional[Verdict] = None) -> Non
 
     print("-" * 50)
 
+
+def print_refinement_result(result: RefinementResult) -> None:
+    """Pretty prints the full Actor-Critic refinement trajectory."""
+    reset = "\033[0m"
+    bold = "\033[1m"
+    green = "\033[92m"
+    red = "\033[91m"
+    yellow = "\033[93m"
+    cyan = "\033[96m"
+
+    print("\n" + "=" * 75)
+    print(f"{bold}{cyan}ACTOR-CRITIC REFINEMENT LOOP TRAJECTORY{reset}")
+    print("=" * 75)
+    print(f"{bold}Target Program:{reset}\n{result.code}")
+    print("-" * 75)
+    print(f"{bold}Initial Explanation (E_0):{reset}\n{result.initial_explanation}")
+
+    for step in result.steps:
+        v_color = green if step.judge_result.verdict == Verdict.CORRECT else red
+        print("\n" + "-" * 75)
+        print(
+            f"{bold}Iteration {step.iteration}: {v_color}{step.judge_result.verdict.value}{reset} "
+            f"(Soundness: {step.judge_result.soundness_score:.2f}, Completeness: {step.judge_result.completeness_score:.2f})"
+        )
+        print(f"Explanation E_{step.iteration - 1}:\n\"{step.explanation}\"")
+        print(f"Judge Critique: {step.judge_result.summary}")
+
+        if step.judge_result.counterexample and step.judge_result.counterexample.found:
+            ce = step.judge_result.counterexample
+            print(f"  {red}[!] Counterexample:{reset} {ce.input_value} -> P(x) = {ce.actual_output} (vs Claimed: {ce.claimed_output})")
+
+    print("\n" + "=" * 75)
+    status_str = f"{green}CONVERGED IN {result.total_iterations} ROUNDS{reset}" if result.converged else f"{yellow}STOPPED AT MAX ROUNDS{reset}"
+    print(f"{bold}FINAL STATUS:{reset} {status_str}")
+    print(f"Soundness Trajectory: {result.initial_soundness:.2f} -> {result.final_soundness:.2f}")
+    print(f"Evolution Summary:    {result.evolution_summary}")
+    print(f"\n{bold}{green}Verified Sound Explanation (E*):{reset}")
+    print(f"\"\"\"\n{result.final_explanation}\n\"\"\"")
+    print("=" * 75)

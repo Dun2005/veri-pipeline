@@ -181,7 +181,15 @@ class LLMJudge:
         lower_e = explanation.lower()
         lower_c = code.lower()
 
-        if ("0.0" in lower_e or "zero" in lower_e) and "empty" in lower_e and "len(" in lower_c and "len(nums) == 0" not in lower_c and "if not" not in lower_c:
+        if (
+            ("0.0" in lower_e or "safely" in lower_e or "without raising" in lower_e or "returns 0" in lower_e)
+            and "empty" in lower_e
+            and "zerodivisionerror" not in lower_e
+            and "raises" not in lower_e
+            and "len(" in lower_c
+            and "len(nums) == 0" not in lower_c
+            and "if not" not in lower_c
+        ):
             return JudgeResult(
                 verdict=Verdict.INCORRECT,
                 soundness_score=0.20,

@@ -145,6 +145,17 @@ def main():
         choices=["gemini", "openai"],
         help="API provider (auto-detected if omitted)",
     )
+    parser.add_argument(
+        "--refine",
+        action="store_true",
+        help="Enable Actor-Critic feedback loop to iteratively refine explanation until verified",
+    )
+    parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=3,
+        help="Maximum iterations for refinement feedback loop (default: 3)",
+    )
 
     args = parser.parse_args()
 
@@ -190,6 +201,25 @@ def main():
             expl_str = f.read()
     except (FileNotFoundError, OSError):
         expl_str = args.explanation
+
+    if args.refine:
+        from src.refinement.generator import ExplanationGenerator
+        from src.refinement.loop import RefinementLoop
+        from rich_or_plain import print_refinement_result
+
+        print("Starting Actor-Critic Explanation Refinement Feedback Loop...")
+        generator = ExplanationGenerator(
+            model=args.model, provider=args.provider, mock=args.mock
+        )
+        refiner = RefinementLoop(
+            judge=judge,
+            generator=generator,
+            max_iterations=args.max_iter,
+            mock=args.mock,
+        )
+        res = refiner.run(code=code_str, initial_explanation=expl_str)
+        print_refinement_result(res)
+        return
 
     print("Evaluating with LLM Judge...")
     result = judge.evaluate(code_str, expl_str)
